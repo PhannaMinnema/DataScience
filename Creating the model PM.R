@@ -21,11 +21,10 @@ df$Positive_Review <- as.vector(df$Positive_Review)
 df$Negative_Review <- as.vector (df$Negative_Review)
 df <- paste(df$Positive_Review, df$Negative_Review)
 
-
 #bron: https://journal.r-project.org/archive/2013/RJ-2013-001/RJ-2013-001.pdf
 #Create the Document-Term Matrix 
 SaveTheMatrix <- function(df) {
-  print("Creating the doc_matrix")
+  #print("Creating the doc_matrix")
   doc_matrix <- create_matrix(df$review_body,
                               language = "english",
                               removeNumbers = TRUE,
@@ -35,24 +34,23 @@ SaveTheMatrix <- function(df) {
   save(doc_matrix, file = "doc_matrix")
 }
 
-#Creating a container
-container <- create_container(doc_matrix,
-                              df$Concensus,
-                              trainSize=1:20000,
-                              testSize= 20001:50000,
-                              virgin = FALSE)
-
-#Training models
+#Creating container and Training models
 TrainClassifiers <- function(dfm, doc_matrix) {
-  print("Creating Container:")
+  #print("Creating Container:")
   container <- create_container(doc_matrix,
                                 df$Consensus,
                                 trainSize = 1:20000,
                                 testSize = 20001:50000,
                                 virgin = FALSE)
   
-  trainingmodels <- train_models(container, algorithms = c("MAXENT", "SVM", "BAGGING", "RF", "TREE"))
-  save(trainingmodels, file = "trainedModels.Rd")
+  models <- train_models(container, algorithms = c("MAXENT", "SVM", "BAGGING", "RF", "TREE"))
+  results <- classify_models(container, models)
   
-  rm(list = c("df", "TDMmatrix", "container", "models"))
+  rm(list = c("df", "doc_matrix", "container", "models"))
 }
+
+
+#analystics
+analytics <- create_analytics(container, models)
+summary (analytics)
+
