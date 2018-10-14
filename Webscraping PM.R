@@ -1,11 +1,6 @@
 # loading libraries rvest, xml, stringr, mysql
-library(rvest)
-library (tidyverse)
-library (rebus)
-library (XML)
-library (stringr)
-library(RMySQL)
-library(dbConnect)
+required_packages <- c("rvest", "tidyverse", "rebus", "XML", "stringr", "RMySQL", "dbConnect")
+x <- lapply(required_packages, library, character.only = TRUE)
 
 # connect to MySQL  WERKT NIET
 db <- dbConnect(RMySQL::MySQL(), 
