@@ -1,15 +1,17 @@
 #load libraries 
 required_packages <- c("tm", "RTextTools","dplyr", "e1071","reshape2", "wordcloud", "readr", 
                        "ggplot2", "tidytext","lubridate", "tidyverse", "tidyr", 
-                       "SnowballC", "devtools","httr")
+                       "SnowballC", "devtools","httr","widyr")
 x <- lapply(required_packages, library, character.only = TRUE)
- 
+
 #load RTextTools from Ronald 
 install_github("ronald245/RTextTools", subdir = "RTextTools")
 
 #open file hotel reviews downloaded from kaggle
 setwd("D:/Data/Rstudio/Data Science/")
 df <- read.csv("Hotel_Reviews.csv", stringsAsFactors = FALSE, nrow=20000)
+#na.strings = c("", "NA"),
+#df <- df%>% na.omit()
 
 #randomize the dataset
 df <- df[sample(row(df)),]
@@ -23,16 +25,20 @@ neg.rev <- as.data.frame(t(rbind(review_body = df$Negative_Review, Consensus = a
 df <- rbind(pos.rev, neg.rev)%>% tibble::rowid_to_column("ID")
 #df_clean$review_body <- as.vector(df_clean$review_body)
 
-# Turn df into source to create corpus
-review_source <- DataframeSource(df_clean)
+#make a corpus
+hotel_corpus <- VCorpus(VectorSource(df))
 
-#create corpus
-hotel_corpus <- VCorpus(review_source)
+#inspect corpus
+hotel_corpus
+inspect(hotel_corpus[1:3])
+content(hotel_corpus[[1]]) # check first review
+
+
 
 #Corpus cleaning 
-my_stopwords <- c(stopwords("en"),"positive", "negative","available", "via", "the", "of", "and", "it", "in", "hotel", "staff", "location", "breakfast", "bathroom")
-
-
+my_stopwords <- c(stopwords("en"),"positive", "negative","available", "via", 
+                  "the", "of", "and", "it", "in", "hotel", "staff", "location", 
+                  "breakfast", "bathroom")
 
 clean_corpus <- function(corpus){
   corpus %>%
@@ -45,9 +51,44 @@ clean_corpus <- function(corpus){
     return()
 }
 
-clean_corpus(hotel_corpus)
+#save cleaning function
+clean_hotel_corpus <- clean_corpus(hotel_corpus)
 
-hotel_corpus[[1]]$content 
+#show first content
+clean_hotel_corpus[[1]]$content 
+
+#df = clean_hotel_corpus
+df <- clean_hotel_corpus
+
+#generate TDM
+dtm<- DocumentTermMatrix(df)
+
+#generate word frequency matrix
+wfm <- wfm(df)
+?wfm
+
+#convert to matrix
+dtm <- as.matrix(dtm)
+
+#sum rows and sort by frequency
+term_freq <- rowSums(dtm)
+term_freq <- sort(term_freq,
+                  decreasing=TRUE)
+
+# create barplot
+barplot (term_freq[1:10],
+         col = "tan", las = 2)
+
+
+
+
+
+
+
+
+
+
+
 
 
 #bron: https://journal.r-project.org/archive/2013/RJ-2013-001/RJ-2013-001.pdf
