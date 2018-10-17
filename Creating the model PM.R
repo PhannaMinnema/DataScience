@@ -1,10 +1,12 @@
 #load libraries 
-required_packages <- c("tm", "RTextTools","dplyr", "e1071","reshape2", "wordcloud", "readr", 
-                       "ggplot2", "tidytext","lubridate", "tidyverse", "tidyr", 
-                       "SnowballC", "devtools","httr","widyr", "prediction","qdap")
-x <- lapply(required_packages, library, character.only = TRUE)
-
 library(dplyr)
+library(devtools)
+library(httr)
+library(widyr)
+library (prediction)
+library(tm)
+library(RTextTools)
+library(e1071)
 library(readr)
 library(lubridate)
 library(ggplot2)
@@ -24,15 +26,13 @@ library(reshape2)
 theme_set(theme_minimal())
 
 
-#load RTextTools from Ronald 
-#install_github("ronald245/RTextTools", subdir = "RTextTools")
 
 #open file hotel reviews downloaded from kaggle
 setwd("D:/Data/Rstudio/Data Science/")
 df <- read.csv("Hotel_Reviews.csv", stringsAsFactors = FALSE, nrow=20000)
 
-#df <- df$Review_Date <- as.Date(df$Review_Date, format = "%m/%d/%Y")
-#df %>% 
+dfdate <- df$Review_Date <- as.Date(df$Review_Date, format = "%m/%d/%Y")
+dfdate %>% 
   count(Week = round_date(Review_Date, "Week")) %>%
   ggplot(aes(Week, n)) +
   geom_line() + 
@@ -74,8 +74,7 @@ clean_corpus <- function(corpus){
     tm_map(content_transformer (stripWhitespace))%>%
     tm_map(content_transformer (stemDocument))%>%
     return()
-    #save(clean_corpus,file='mycorpus.Rd')
-  }
+}
 
 #save cleaning function
 mycleancorpus <- clean_corpus(mycorpus)
@@ -103,14 +102,16 @@ TrainClassifiers <- function(df,doc_matrix) {
   #classifiers train
   models <- train_models(container, algorithms = c("SVM", "BAGGING", "RF", "TREE"))
   results <- classify_models(container, models)
+  create_scoreSummary (container,results)
   
-  analytics <- create_analytics(container, models)
+  analytics <- create_analytics(container, results)
   summary (analytics)
   
+  
   #save the models + container as R data
-  save(models,file='Rmodels.Rd')
-  save(container, file= 'container.Rd')
-  }
+  #save(models,file='Rmodels.Rd')
+  #save(container, file= 'container.Rd')
+}
 
 # load model and container in trainclassifier
 TrainClassifiers(df,dtm)
@@ -118,9 +119,11 @@ load("Rmodels.Rd")
 load("container.Rd")
 
 df$BAGGING_LABEL = results$BAGGING_LABEL
-df$FOREST_LABEL = results$BAGGING_LABEL
+df$FOREST_LABEL = results$FOREST_LABEL
 df$TREE_LABEL = results$TREE_LABEL
 df$SVM_LABEL = results$SVM_LABEL
 df$Consensus= cbind(df$BAGGING_LABEL,df$FOREST_LABEL, df$TREE_LABEL, df$SVM_LABEL)
 
 rm(list = c("doc_matrix", "container", "models"))
+
+#Testint the algorithm accuracy
