@@ -1,5 +1,7 @@
 # loading libraries rvest, xml, stringr, mysql
-required_packages <- c("rvest", "tidyverse", "XML", "stringr", "RMySQL", "dbConnect")
+required_packages <- c("rvest", "tidyverse", "XML", "stringr", "RMySQL", "dbConnect","tm", "RTextTools","dplyr", "e1071","reshape2", "wordcloud", "readr", 
+                       "ggplot2", "tidytext","lubridate", "tidyverse", "tidyr", 
+                       "SnowballC", "devtools","httr","widyr", "prediction")
 x <- lapply(required_packages, library, character.only = TRUE)
 
 # connect to MySQL  
@@ -10,7 +12,6 @@ db <- dbConnect(RMySQL::MySQL(),
                 user="PM",
                 password="password")
 
-dbListTables(db)
 
 # Reading the webpage into R
 basic_url <- read_html('https://www.tripadviser.nl')
@@ -19,8 +20,10 @@ url <-'https://www.tripadvisor.nl/Hotel_Review-g150807-d154868-Reviews-Le_Blanc_
 #open the page
 page <- read_html(url) 
 
-#get reviews            https://www.datacamp.com/community/tutorials/r-web-scraping-rvest
-get_reviews <- function(html){
+#get reviews https://www.datacamp.com/community/tutorials/r-web-scraping-rvest 
+#https://stackoverflow.com/questions/43232549/function-for-next-page-rvest-scrape#
+
+get_reviews <- function(page){
   page %>% 
     # The relevant tag indicates the class
     html_nodes('.partial_entry') %>%      
@@ -35,79 +38,76 @@ get_reviews <- function(html){
     return()
 }
 
-get_reviews(page)
-get_reviews(next_page)
+get_score <- function(page){
+  regex.magix <- "\\b(?!bubble_\\d\\d)\\b\\S+"
+  regex.magix2 <- "[^0-9]+"
+  page %>%
+    html_nodes('.reviewSelector .ui_bubble_rating')%>%
+    html_text() %>%
+    gsub(pattern = regex.magix, replacement = "", perl = TRUE)%>%
+    gsub(pattern = regex.magix2, replacement = "")%>%
+    return()
+}
+
 
 #scraping next page
-getNextUrl <- function(url) {
+getNextUrl <- function(page) {
   page %>% 
     html_node(".next") %>%
     html_attr("href")
   sep = ''
 }
 
-
-#open the next review page
+#open the next review pages
 more_rev <- function(url, n) {
-  purrr::map_df(1:n, ~{
-    oUrl <- url
+  for(i in 1:n){
+    url <- nexturl
+    page <- read_html(url) 
     post <- get_reviews(page)
-    url <<- getNextUrl(url)
-    data.frame(curpage = oUrl, 
-               nexturl = url,
-               posttext = post)
-  })
-}
-
-df <- more_rev(url,12)
-
-df$posttext[[1]]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Get the titles from the reviews & Converting the titles to text
-review_titles <- append(review_titles, html_text(html_nodes(page, '.title > .noQuotes')))
-review_text <- append(review_text, html_text(html_nodes(page, '.prw_reviews_text_summary_hsx > .entry > .partial_entry')))
-
-# Create dataframe for the Reviews
-reviews <- cbind(review_titles, review_text)
-colnames(reviews) <- c('Titles', 'Review')
-
-print(reviews)
-
-if (store_reviews_in_csv) {
-  # Export the reviews table to csv file
-  write.table(reviews, 'csv/tripadvisor_ozo_hotel_reviews.csv') 
-}
-
-if (store_reviews_in_db) {
-  print('Storing reviews in database...')
-  
-  reviews[,1] <- gsub('"', "'", reviews[,1])
-  reviews[,2] <- gsub('"', "'", reviews[,2])
-  
-  # Insert Table data into the Database
-  for(rowId in c(1:nrow(reviews))) {
-    callQuery <- paste('CALL add_review("', reviews[rowId, 1], '", "', reviews[rowId,2], '")', sep = "")
-    dbSendQuery(db, callQuery)
+    nexturl <<- getNextUrl(url)
+    #score <- get_score(page)
+    df <- data.frame(
+               review = post,
+               score = score)
+    SaveDataFrameToDB(db,"webreviews", df, TRUE)
   }
-  
-  # Close connection
-  dbDisconnect(db)
-  
 }
 
+nexturl <- url
+df <- more_rev(url,12)
+ 
+df$review <- as.vector(df$review)
+
+#create corpus
+mycorpus <- VCorpus(VectorSource(df$review))
+
+#stopwords
+my_stopwords <- c(stopwords("en"),"positive", "negative","available", "via", 
+                  "the", "of", "and", "it", "in", "hotel", "staff", "location", 
+                  "breakfast", "bathroom")
+#clean_corpus
+clean_corpus <- function(corpus){
+  corpus %>%
+    tm_map(content_transformer (tolower)) %>%
+    tm_map(content_transformer (removePunctuation)) %>%
+    tm_map(content_transformer (removeNumbers))%>%
+    tm_map(content_transformer (removeWords),my_stopwords)%>%
+    tm_map(content_transformer (stripWhitespace))%>%
+    tm_map(content_transformer (stemDocument))%>%
+    return()
 }
+
+#execute cleaning function
+mycorpus <- clean_corpus(mycorpus)
+
+
+# put data into MySQL with overwrite function  
+SaveDataFrameToDB <- function(db, table, df, doAppend){
+  dbWriteTable(db, table, df, overwrite = !doAppend, append=doAppend)
+  dbDisconnect(db)
+}
+
+
+
+
+
