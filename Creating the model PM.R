@@ -1,8 +1,27 @@
 #load libraries 
 required_packages <- c("tm", "RTextTools","dplyr", "e1071","reshape2", "wordcloud", "readr", 
                        "ggplot2", "tidytext","lubridate", "tidyverse", "tidyr", 
-                       "SnowballC", "devtools","httr","widyr", "prediction")
+                       "SnowballC", "devtools","httr","widyr", "prediction","qdap")
 x <- lapply(required_packages, library, character.only = TRUE)
+
+library(dplyr)
+library(readr)
+library(lubridate)
+library(ggplot2)
+library(tidytext)
+library(tidyverse)
+library(stringr)
+library(tidyr)
+library(scales)
+library(broom)
+library(purrr)
+library(widyr)
+library(igraph)
+library(ggraph)
+library(SnowballC)
+library(wordcloud)
+library(reshape2)
+theme_set(theme_minimal())
 
 
 #load RTextTools from Ronald 
@@ -10,37 +29,36 @@ x <- lapply(required_packages, library, character.only = TRUE)
 
 #open file hotel reviews downloaded from kaggle
 setwd("D:/Data/Rstudio/Data Science/")
-df <- read.csv("Hotel_Reviews.csv", stringsAsFactors = FALSE, nrow=3000)
-#na.strings = c("", "NA"),
-#df <- df%>% na.omit()
+df <- read.csv("Hotel_Reviews.csv", stringsAsFactors = FALSE, nrow=20000)
 
-#randomize the dataset
-pos.rev <- as.data.frame(t(rbind(review_body = df$Positive_Review, Consensus = as.integer(1))))
-neg.rev <-  as.data.frame(t(rbind(review_body = df$Negative_Review, Consensus = as.integer(-1))))
+#df <- df$Review_Date <- as.Date(df$Review_Date, format = "%m/%d/%Y")
+#df %>% 
+  count(Week = round_date(Review_Date, "Week")) %>%
+  ggplot(aes(Week, n)) +
+  geom_line() + 
+  ggtitle('The Number of Reviews Per Week')
+
+
+#combine pos + neg rev
+pos.rev <- as.data.frame(t(rbind(review = df$Positive_Review, Consensus = as.integer(1))))
+neg.rev <-  as.data.frame(t(rbind(review = df$Negative_Review, Consensus = as.integer(-1))))
 df <-rbind(pos.rev, neg.rev)
 
 #to dubbel check columnname for corpus
 View(df)
 df <- df[sample(row(df)),]
-#df$Positive_Review <- as.vector(df$Positive_Review)
-#df$Negative_Review <- as.vector(df$Negative_Review)
-#df$combi <- paste(df$Positive_Review, df$Negative_Review)
-
-#dataframe aangemaakt gecombineerd incl ID column create as vector  
-#df <-rbind(pos.rev, neg.rev)
-#df <- rbind(pos.rev, neg.rev)%>% tibble::rowid_to_column("ID")
-#df_clean$review_body <- as.vector(df_clean$review_body)
 
 #make a corpus
-hotel_corpus <- VCorpus(VectorSource(df$review_body))
+mycorpus <- VCorpus(VectorSource(df$review))
 
 #inspect corpus
-hotel_corpus
-inspect(hotel_corpus[1:3])
+mycorpus
+
 #content(hotel_corpus[[1]]) # check first review
+inspect(mycorpus[1:3])
 
 #show first item
-strwrap(hotel_corpus[1])
+strwrap(mycorpus[1])
 
 #Corpus cleaning 
 my_stopwords <- c(stopwords("en"),"positive", "negative","available", "via", 
@@ -56,12 +74,12 @@ clean_corpus <- function(corpus){
     tm_map(content_transformer (stripWhitespace))%>%
     tm_map(content_transformer (stemDocument))%>%
     return()
-}
+    #save(clean_corpus,file='mycorpus.Rd')
+  }
 
 #save cleaning function
-mycorpus <- clean_corpus(hotel_corpus)
+mycleancorpus <- clean_corpus(mycorpus)
 
-rm(pos.rev, neg.rev)
 #show first 
 strwrap(mycorpus[1:20])
 
@@ -71,10 +89,6 @@ dtm<- DocumentTermMatrix(mycorpus)
 
 #View(dtm[[1]])
 #inspect(dtm)
-
-#generate word frequency matrix
-#wfm <- wfm(mycorpus)
-#wfm <- as.matrix(mycorpus)
 
 #bron: https://journal.r-project.org/archive/2013/RJ-2013-001/RJ-2013-001.pdf
 #Creating container and Training models
@@ -87,7 +101,7 @@ TrainClassifiers <- function(df,doc_matrix) {
                                 virgin = FALSE)
   
   #classifiers train
-  models <- train_models(container, algorithms = c("MAXENT", "SVM", "BAGGING", "RF", "TREE"))
+  models <- train_models(container, algorithms = c("SVM", "BAGGING", "RF", "TREE"))
   results <- classify_models(container, models)
   
   analytics <- create_analytics(container, models)
@@ -96,14 +110,17 @@ TrainClassifiers <- function(df,doc_matrix) {
   #save the models + container as R data
   save(models,file='Rmodels.Rd')
   save(container, file= 'container.Rd')
-
   }
-
 
 # load model and container in trainclassifier
 TrainClassifiers(df,dtm)
 load("Rmodels.Rd")
 load("container.Rd")
 
+df$BAGGING_LABEL = results$BAGGING_LABEL
+df$FOREST_LABEL = results$BAGGING_LABEL
+df$TREE_LABEL = results$TREE_LABEL
+df$SVM_LABEL = results$SVM_LABEL
+df$Consensus= cbind(df$BAGGING_LABEL,df$FOREST_LABEL, df$TREE_LABEL, df$SVM_LABEL)
 
-rm(list = c("df", "doc_matrix", "container", "models"))
+rm(list = c("doc_matrix", "container", "models"))
