@@ -6,12 +6,20 @@ library ('stringr')
 #install.packages ('XML')
 library ('XML')
 
+# connect to MySQL  
+db <- dbConnect(RMySQL::MySQL(), 
+                dbname="rstudio", 
+                host="localhost",
+                port= 3306,
+                user="PM",
+                password="password")
+
+
 
 urlhotel <-paste(basicurl,'/?q-check-out=2018-10-28&FPQ=3&q-check-in=2018-10-27&WOE=7&WOD=6&q-room-0-children=0&pa=1&tab=description&JHR=2&q-room-0-adults=2&YGF=2&MGT=1&ZSX=0&SYE=3', sep = '')
 
 hotelurl <- paste(basicurl, i, sep='')
 hotelscrape <- read_html(urlhotel)
-
 
 basicurl <- 'https://uk.hotels.com/ho121869-tr'
 page <- read_html(basicurl) 
@@ -47,3 +55,10 @@ df2 <- cbind (score = scorescraper2, review=reviewscraper2)
 df <- data.frame(rbind(df1, df2))
 
 
+# put data into MySQL with overwrite function  
+SaveDataFrameToDB <- function(db, table, df, doAppend){
+  dbWriteTable(db, table, df, overwrite = !doAppend, append=doAppend)
+  dbDisconnect(db)
+}
+
+SaveDataFrameToDB(db, "webreviews",df, doAppend=TRUE)
