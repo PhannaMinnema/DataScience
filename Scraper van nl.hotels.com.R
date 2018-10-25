@@ -17,9 +17,11 @@ reviewscraper <- hotelscrape %>%
   html_text()
 reviewscraper
 
+# pakt er 5 
 scorescraper <- hotelscrape%>%
-  html_nodes("span.rating")%>%
+  html_nodes(".review-score .rating")%>%
   html_text()
 scorescraper
 
+df <- data.frame(reviewscraper, scorescraper)
 
